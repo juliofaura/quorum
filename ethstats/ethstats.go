@@ -557,13 +557,37 @@ func (s *Service) assembleBlockStats(block *types.Block) *blockStats {
 	// Assemble and return the block stats
 	author, _ := s.engine.Author(header)
 
+	validator, proposer := s.ibftInformation(header, author)
+
+	return &blockStats{
+		Number:     header.Number,
+		Hash:       header.Hash(),
+		ParentHash: header.ParentHash,
+		Timestamp:  header.Time,
+		Miner:      author,
+		Validator:  validator,
+		Proposer:   proposer,
+		GasUsed:    new(big.Int).Set(header.GasUsed),
+		GasLimit:   new(big.Int).Set(header.GasLimit),
+		Diff:       header.Difficulty.String(),
+		TotalDiff:  td.String(),
+		Txs:        txs,
+		TxHash:     header.TxHash,
+		Root:       header.Root,
+		Uncles:     uncles,
+	}
+}
+
+func (s *Service) ibftInformation(header *types.Header, author common.Address) (*common.Address, *common.Address) {
+	if !s.eth.Miner().Mining() {
+		return nil, nil
+	}
 	/// IBFT consensus extraction
 	// TODO: Extract to another more appropiate place
 	// FIXME: Verify first if it is on IBFT consensus protocol
 	// FIXME: If we are on light ethereum this don't works
 	var validator *common.Address
 	var proposer *common.Address
-
 	var service *eth.PublicEthereumAPI
 	for cont := 0; cont < len(s.eth.APIs()) || service == nil; cont++ {
 		switch s.eth.APIs()[cont].Service.(type) {
@@ -599,24 +623,7 @@ func (s *Service) assembleBlockStats(block *types.Block) *blockStats {
 		log.Warn("I can't obtain coinbase")
 	}
 	/// END - IBFT consensus extraction
-
-	return &blockStats{
-		Number:     header.Number,
-		Hash:       header.Hash(),
-		ParentHash: header.ParentHash,
-		Timestamp:  header.Time,
-		Miner:      author,
-		Validator:  validator,
-		Proposer:   proposer,
-		GasUsed:    new(big.Int).Set(header.GasUsed),
-		GasLimit:   new(big.Int).Set(header.GasLimit),
-		Diff:       header.Difficulty.String(),
-		TotalDiff:  td.String(),
-		Txs:        txs,
-		TxHash:     header.TxHash,
-		Root:       header.Root,
-		Uncles:     uncles,
-	}
+	return validator, proposer
 }
 
 // reportHistory retrieves the most recent batch of blocks and reports it to the
