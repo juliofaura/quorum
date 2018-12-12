@@ -88,7 +88,7 @@ type Service struct {
 	pongCh chan struct{} // Pong notifications are fed into this channel
 	histCh chan []uint64 // History request block numbers are fed into this channel
 
-	api *eth.PublicEthereumAPI
+	coinbase *common.Address
 }
 
 // New returns a monitoring service ready for stats reporting.
@@ -107,12 +107,16 @@ func New(url string, ethServ *eth.Ethereum, lesServ *les.LightEthereum) (*Servic
 		engine = lesServ.Engine()
 	}
 
-	var api *eth.PublicEthereumAPI
+	var coinbase *common.Address
 
-	for cont := 0; cont < len(ethServ.APIs()) || api == nil; cont++ {
+	for cont := 0; cont < len(ethServ.APIs()) || coinbase == nil; cont++ {
 		switch ethServ.APIs()[cont].Service.(type) {
 		case *eth.PublicEthereumAPI:
+			log.Trace("Getting coinbase")
+			var api *eth.PublicEthereumAPI
 			api = ethServ.APIs()[9].Service.(*eth.PublicEthereumAPI)
+			var coinaux, _ = api.Coinbase()
+			coinbase = &coinaux
 		}
 	}
 
@@ -125,12 +129,11 @@ func New(url string, ethServ *eth.Ethereum, lesServ *les.LightEthereum) (*Servic
 		host:   parts[4],
 		pongCh: make(chan struct{}),
 		histCh: make(chan []uint64, 1),
-		api:    api,
+		coinbase:    coinbase,
 	}, nil
 }
 
-// Protocols implements node.Service, returning the P2P network protocols used
-// by the stats service (nil as it doesn't use the devp2p overlay network).
+// Protocols implements nnil as it .Service, returning the P2P network protocols used
 func (s *Service) Protocols() []p2p.Protocol { return nil }
 
 // APIs implements node.Service, returning the RPC API endpoints provided by the
@@ -327,7 +330,7 @@ func (s *Service) readLoop(conn *websocket.Conn) {
 		// Retrieve the next generic network packet and bail out on error
 		var msg map[string][]interface{}
 		if err := websocket.JSON.Receive(conn, &msg); err != nil {
-			log.Warn("Failed to decode stats server message", "err", err)
+			log.Warn("Failed to decode stats server message", "err", err, "msg", msg)
 			return
 		}
 		log.Trace("Received message from stats server", "msg", msg)
@@ -512,21 +515,21 @@ func (s *Service) reportLatency(conn *websocket.Conn) error {
 
 // blockStats is the information to report about individual blocks.
 type blockStats struct {
-	Number     *big.Int       `json:"number"`
-	Hash       common.Hash    `json:"hash"`
-	ParentHash common.Hash    `json:"parentHash"`
-	Timestamp  *big.Int       `json:"timestamp"`
-	Miner      common.Address `json:"miner"`
+	Number     *big.Int        `json:"number"`
+	Hash       common.Hash     `json:"hash"`
+	ParentHash common.Hash     `json:"parentHash"`
+	Timestamp  *big.Int        `json:"timestamp"`
+	Miner      common.Address  `json:"miner"`
 	Validator  *common.Address `json:"validator"`
 	Proposer   *common.Address `json:"proposer"`
-	GasUsed    uint64         `json:"gasUsed"`
-	GasLimit   uint64         `json:"gasLimit"`
-	Diff       string         `json:"difficulty"`
-	TotalDiff  string         `json:"totalDifficulty"`
-	Txs        []txStats      `json:"transactions"`
-	TxHash     common.Hash    `json:"transactionsRoot"`
-	Root       common.Hash    `json:"stateRoot"`
-	Uncles     uncleStats     `json:"uncles"`
+	GasUsed    uint64          `json:"gasUsed"`
+	GasLimit   uint64          `json:"gasLimit"`
+	Diff       string          `json:"difficulty"`
+	TotalDiff  string          `json:"totalDifficulty"`
+	Txs        []txStats       `json:"transactions"`
+	TxHash     common.Hash     `json:"transactionsRoot"`
+	Root       common.Hash     `json:"stateRoot"`
+	Uncles     uncleStats      `json:"uncles"`
 }
 
 // txStats is the information to report about individual transactions.
@@ -606,8 +609,7 @@ func (s *Service) assembleBlockStats(block *types.Block) *blockStats {
 	var validator *common.Address
 	var proposer *common.Address
 
-	if s.api != nil {
-		coinbase, _ := s.api.Coinbase()
+	if s.coinbase != nil {
 
 		var istanbulExtra *types.IstanbulExtra
 
@@ -616,8 +618,8 @@ func (s *Service) assembleBlockStats(block *types.Block) *blockStats {
 			if istanbulExtra.Validators != nil {
 				for cont := 0; cont < len(istanbulExtra.Validators) && validator == nil; cont++ {
 					val := istanbulExtra.Validators[cont]
-					if val.Hex() == coinbase.Hex() {
-						validator = &coinbase
+					if val.Hex() == s.coinbase.Hex() {
+						validator = s.coinbase
 					}
 				}
 			} else {
@@ -627,8 +629,8 @@ func (s *Service) assembleBlockStats(block *types.Block) *blockStats {
 			log.Warn("I don't understand, istanbulExtra is empty!, error: ", err)
 		}
 
-		if coinbase.Hex() == author.Hex() {
-			proposer = &coinbase
+		if s.coinbase.Hex() == author.Hex() {
+			proposer = s.coinbase
 		}
 	} else {
 		log.Warn("I can't obtain coinbase")
