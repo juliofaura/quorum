@@ -38,6 +38,7 @@ import (
 const (
 	// chainHeadChanSize is the size of channel listening to ChainHeadEvent.
 	chainHeadChanSize = 10
+	TX_SIZE           = 1024
 )
 
 var (
@@ -566,7 +567,8 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	}
 	// Heuristic limit, reject transactions over 32KB to prevent DOS attacks
 	// UPDATED to 64KB to support the deployment of bigger contract due to the pressing need for sophisticated/complex contract in financial/capital markets - Nathan Aw
-	if tx.Size() > 64*1024 {
+	// if tx.Size() > 64*1024 {
+	if tx.Size() > TX_SIZE*1024 { // Patched by Julio
 		return ErrOversizedData
 	}
 	// Transactions can't be negative. This may never happen using RLP decoded
@@ -728,7 +730,6 @@ func (pool *TxPool) journalTx(from common.Address, tx *types.Transaction) {
 		log.Warn("Failed to journal local transaction", "err", err)
 	}
 }
-
 
 // promoteTx adds a transaction to the pending (processable) list of transactions
 // and returns whether it was inserted or an older was better.
@@ -1212,7 +1213,6 @@ func newTxLookup() *txLookup {
 		all: make(map[common.Hash]*types.Transaction),
 	}
 }
-
 
 // Range calls f on each key and value present in the map.
 func (t *txLookup) Range(f func(hash common.Hash, tx *types.Transaction) bool) {

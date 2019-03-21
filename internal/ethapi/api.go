@@ -29,8 +29,9 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/davecgh/go-spew/spew"
 	"sync"
+
+	"github.com/davecgh/go-spew/spew"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
@@ -745,6 +746,7 @@ func (s *PublicBlockChainAPI) EstimateGas(ctx context.Context, args CallArgs) (h
 		hi = block.GasLimit()
 	}
 	cap = hi
+	text := fmt.Sprintf("\nlo was %v, hi was %v, and cap was %v\n", lo, hi, cap)
 
 	// Create a helper to check if a gas allowance results in an executable transaction
 	executable := func(gas uint64) bool {
@@ -752,6 +754,7 @@ func (s *PublicBlockChainAPI) EstimateGas(ctx context.Context, args CallArgs) (h
 
 		_, _, failed, err := s.doCall(ctx, args, rpc.PendingBlockNumber, vm.Config{}, 0)
 		if err != nil || failed {
+			text += fmt.Sprintf("\nCalled function with gas=%v, failed is %v, err is %v", gas, failed, err)
 			return false
 		}
 		return true
@@ -768,7 +771,7 @@ func (s *PublicBlockChainAPI) EstimateGas(ctx context.Context, args CallArgs) (h
 	// Reject the transaction as invalid if it still fails at the highest allowance
 	if hi == cap {
 		if !executable(hi) {
-			return 0, fmt.Errorf("gas required exceeds allowance or always failing transaction")
+			return 0, fmt.Errorf("gas required exceeds allowance or always failing transaction (in internal/ethapi/api.go, where hi == cap == %v%v", hi, text)
 		}
 	}
 	return hexutil.Uint64(hi), nil
@@ -1168,9 +1171,9 @@ type SendTxArgs struct {
 	Input *hexutil.Bytes `json:"input"`
 
 	//Quorum
-	PrivateFrom string   `json:"privateFrom"`
-	PrivateFor  []string `json:"privateFor"`
-	PrivateTxType string `json:"restriction"`
+	PrivateFrom   string   `json:"privateFrom"`
+	PrivateFor    []string `json:"privateFor"`
+	PrivateTxType string   `json:"restriction"`
 	//End-Quorum
 }
 
@@ -1583,13 +1586,13 @@ type AsyncSendTxArgs struct {
 }
 
 type AsyncResultSuccess struct {
-	Id     string	   `json:"id,omitempty"`
+	Id     string      `json:"id,omitempty"`
 	TxHash common.Hash `json:"txHash"`
 }
 
 type AsyncResultFailure struct {
-	Id     string	   `json:"id,omitempty"`
-	Error  string      `json:"error"`
+	Id    string `json:"id,omitempty"`
+	Error string `json:"error"`
 }
 
 type Async struct {
@@ -1650,7 +1653,7 @@ var async = newAsync(100)
 // Please note: This is a temporary integration to improve performance in high-latency
 // environments when sending many private transactions. It will be removed at a later
 // date when account management is handled outside Ethereum.
-func (s *PublicTransactionPoolAPI) SendTransactionAsync(ctx context.Context, args AsyncSendTxArgs) (common.Hash, error){
+func (s *PublicTransactionPoolAPI) SendTransactionAsync(ctx context.Context, args AsyncSendTxArgs) (common.Hash, error) {
 
 	select {
 	case async.sem <- struct{}{}:
@@ -1688,4 +1691,5 @@ func (s *PublicBlockChainAPI) GetQuorumPayload(digestHex string) (string, error)
 	}
 	return fmt.Sprintf("0x%x", data), nil
 }
+
 //End-Quorum
