@@ -38,7 +38,7 @@ import (
 const (
 	// chainHeadChanSize is the size of channel listening to ChainHeadEvent.
 	chainHeadChanSize = 10
-	TX_SIZE           = 1024
+	TX_SIZE           = 1024 // Added by Julio
 )
 
 var (

@@ -746,7 +746,6 @@ func (s *PublicBlockChainAPI) EstimateGas(ctx context.Context, args CallArgs) (h
 		hi = block.GasLimit()
 	}
 	cap = hi
-	text := fmt.Sprintf("\nlo was %v, hi was %v, and cap was %v\n", lo, hi, cap)
 
 	// Create a helper to check if a gas allowance results in an executable transaction
 	executable := func(gas uint64) bool {
@@ -754,7 +753,6 @@ func (s *PublicBlockChainAPI) EstimateGas(ctx context.Context, args CallArgs) (h
 
 		_, _, failed, err := s.doCall(ctx, args, rpc.PendingBlockNumber, vm.Config{}, 0)
 		if err != nil || failed {
-			text += fmt.Sprintf("\nCalled function with gas=%v, failed is %v, err is %v", gas, failed, err)
 			return false
 		}
 		return true
@@ -771,7 +769,7 @@ func (s *PublicBlockChainAPI) EstimateGas(ctx context.Context, args CallArgs) (h
 	// Reject the transaction as invalid if it still fails at the highest allowance
 	if hi == cap {
 		if !executable(hi) {
-			return 0, fmt.Errorf("gas required exceeds allowance or always failing transaction (in internal/ethapi/api.go, where hi == cap == %v%v", hi, text)
+			return 0, fmt.Errorf("gas required exceeds allowance or always failing transaction (in internal/ethapi/api.go)")
 		}
 	}
 	return hexutil.Uint64(hi), nil
